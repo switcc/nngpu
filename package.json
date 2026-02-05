@@ -1,0 +1,10 @@
+{
+  "name": "nngpu",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebGPU ↔ WebNN data exchange utilities and demo",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

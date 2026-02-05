@@ -4,43 +4,104 @@ This file provides guidance for AI assistants working in this repository.
 
 ## Project Overview
 
-**nngpu** is a new, early-stage project. The repository is currently being initialized and does not yet contain source code, build configuration, or tests.
+**nngpu** is a JavaScript library and demo for exchanging data between **WebGPU** and **WebNN**. The core idea: create a single `GPUDevice`, derive an `MLContext` from it, and use shared-backend interop utilities to move data between GPU compute shaders and neural-network inference without unnecessary copies.
 
 ## Repository Status
 
-- **State**: Empty / initial setup
+- **State**: Active development
 - **Remote**: `origin` at `switcc/nngpu`
-- **Primary language**: TBD (update once source files are added)
+- **Primary language**: JavaScript (ES modules) + WGSL (shaders)
+- **Runtime**: Browser (Chrome 128+ with WebGPU and WebNN)
 
 ## Directory Structure
 
 ```
 nngpu/
-├── CLAUDE.md          # This file — AI assistant guide
-└── (no other files yet)
+├── CLAUDE.md              # This file — AI assistant guide
+├── index.html             # Demo page
+├── package.json           # Project metadata, dev server script
+├── .gitignore
+├── src/
+│   ├── device.js          # Shared GPUDevice + MLContext initialisation
+│   ├── interop.js         # Data exchange: GPUBuffer ↔ MLTensor
+│   ├── webgpu.js          # WebGPU compute helpers (dispatch, buffer I/O)
+│   ├── webnn.js           # WebNN graph building + inference helpers
+│   └── index.js           # Demo entry point (full round-trip pipeline)
+└── shaders/
+    └── normalize.wgsl     # Example compute shader (min-max normalisation)
 ```
-
-> Update this section as the project grows.
 
 ## Build & Run
 
-No build system is configured yet. Update this section when a build system (CMake, Make, Cargo, etc.) is introduced.
+No build step — the project uses native ES modules loaded directly by the browser.
 
 ```sh
-# placeholder — replace with actual build commands
-# make
-# cmake --build build/
+# Start a local dev server (requires Node.js / npx)
+npm start          # runs: npx serve .
 ```
+
+Then open `http://localhost:3000` in Chrome 128+ (or any browser with both WebGPU and WebNN).
 
 ## Testing
 
-No test framework is configured yet. Update this section when tests are added.
+No automated test framework yet. Manual verification:
 
-```sh
-# placeholder — replace with actual test commands
-# make test
-# ctest --test-dir build/
+1. Run `npm start` and open the demo page.
+2. Check the on-page log and DevTools console for the full pipeline output.
+3. Confirm the round-trip: raw data → WebGPU normalise → MLTensor → WebNN inference → GPUBuffer → CPU readback.
+
+## Key Modules
+
+### `src/device.js`
+Initialises the shared context. Call `createSharedContext()` to get a `{ adapter, device, mlContext }` tuple where the MLContext is backed by the same GPU device.
+
+### `src/interop.js`
+Core data-exchange functions:
+- `gpuBufferToMLTensor()` — reads a GPUBuffer into a new MLTensor (allocating)
+- `mlTensorToGPUBuffer()` — reads an MLTensor into a new GPUBuffer (allocating)
+- `copyGPUBufferToMLTensor()` — copies into an existing MLTensor (in-place)
+- `copyMLTensorToGPUBuffer()` — copies into an existing GPUBuffer (in-place)
+
+All transfers currently go through a CPU-side staging step (`mapAsync` / `readTensor` / `writeTensor`). The shared MLContext still helps the browser avoid full device↔host round-trips internally.
+
+### `src/webgpu.js`
+Thin helpers for compute dispatch:
+- `runComputeShader()` — bind a storage buffer and dispatch workgroups
+- `createFloat32Buffer()` — upload a Float32Array to a GPUBuffer
+- `readFloat32Buffer()` — map a GPUBuffer back to CPU
+
+### `src/webnn.js`
+Graph-building helpers:
+- `buildLinearModel()` — constructs a `relu(input × W + b)` graph
+- `runInference()` — dispatches `mlContext.compute()`
+- `createTensorPair()` — allocates paired input/output MLTensors
+
+### `shaders/normalize.wgsl`
+Example WGSL compute shader that normalises float32 values from [0, 255] to [0, 1].
+
+## Architecture
+
 ```
+┌──────────────────────────────────────────────────────┐
+│                     Browser                          │
+│                                                      │
+│   ┌────────────┐    interop.js    ┌──────────────┐   │
+│   │  WebGPU    │ ───────────────→ │   WebNN      │   │
+│   │  GPUBuffer │ ←─────────────── │   MLTensor   │   │
+│   └────────────┘                  └──────────────┘   │
+│         ↑                               ↑            │
+│         └───── shared GPUDevice ────────┘            │
+│                  (device.js)                         │
+└──────────────────────────────────────────────────────┘
+```
+
+**Data flow in the demo:**
+1. CPU → GPUBuffer (upload raw pixel values)
+2. GPUBuffer → GPUBuffer (compute shader normalises in-place)
+3. GPUBuffer → MLTensor (interop: staging + writeTensor)
+4. MLTensor → MLTensor (WebNN inference)
+5. MLTensor → GPUBuffer (interop: readTensor + upload)
+6. GPUBuffer → CPU (readback for display)
 
 ## Development Workflow
 
@@ -57,30 +118,29 @@ No test framework is configured yet. Update this section when tests are added.
 
 ### Code Style
 
-Document language-specific style guidelines here once the primary language is chosen.
+- ES modules (`import`/`export`), no bundler
+- JSDoc type annotations on all public functions
+- WGSL shaders live in `shaders/` and are fetched at runtime
+- Prefer `async`/`await` over raw Promises
 
 ## Key Conventions
 
 1. **Keep this file up to date** — When adding new modules, build steps, or conventions, update CLAUDE.md so future AI sessions have accurate context.
 2. **Prefer simplicity** — Avoid over-engineering; add complexity only when justified by requirements.
-3. **Test before pushing** — Once a test suite exists, run it before every push.
-4. **No secrets in the repo** — Never commit API keys, credentials, or `.env` files.
-
-## Architecture
-
-No architecture decisions have been made yet. Document major design choices here as they arise (e.g., library vs. application, GPU backend selection, data flow patterns).
+3. **Shared context is mandatory** — Always derive `MLContext` from the `GPUDevice` via `createSharedContext()`. Never create independent contexts.
+4. **Destroy GPU resources** — Call `.destroy()` on GPUBuffers and MLTensors when done.
+5. **No secrets in the repo** — Never commit API keys, credentials, or `.env` files.
 
 ## Dependencies
 
-No dependencies configured yet. Document dependency management approach here once established (e.g., package manager, vendored libs, system requirements).
+- **Runtime**: None — uses only browser-native WebGPU and WebNN APIs.
+- **Dev server**: `npx serve` (fetched on demand, not installed).
+- **Browser requirement**: Chrome 128+ or equivalent with both WebGPU and WebNN enabled.
 
 ## Useful Commands
 
 | Task | Command |
 |------|---------|
-| Build | TBD |
-| Test | TBD |
-| Lint | TBD |
-| Clean | TBD |
-
-> Fill in this table as tooling is added.
+| Dev server | `npm start` |
+| Lint | Not configured yet |
+| Test | Manual — open demo page in browser |

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>nngpu — WebGPU ↔ WebNN data exchange</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 720px;
+      margin: 2rem auto;
+      background: #111;
+      color: #eee;
+    }
+    h1 { font-size: 1.4rem; }
+    pre {
+      background: #1a1a2e;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      line-height: 1.5;
+      font-size: 0.9rem;
+    }
+    .note {
+      color: #999;
+      font-size: 0.85rem;
+      margin-top: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>nngpu — WebGPU ↔ WebNN round-trip demo</h1>
+  <pre id="log">Starting…
+</pre>
+  <p class="note">
+    Requires Chrome 128+ (or a browser with both WebGPU and WebNN support).<br/>
+    Open DevTools console for full error details.
+  </p>
+  <script type="module" src="src/index.js"></script>
+</body>
+</html>
